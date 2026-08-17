@@ -5,22 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SRO Rule Filings{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#128220;</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230A1C26'/><rect x='3' y='9' width='2.4' height='4' fill='%2300C2A8' opacity='.55'/><rect x='6.8' y='6' width='2.4' height='7' fill='%2300C2A8' opacity='.8'/><rect x='10.6' y='3' width='2.4' height='10' fill='%2300C2A8'/></svg>">
 </head>
 <body>
 <header class="topbar">
   <div class="wrap">
     <a class="brand" href="{{ url_for('index') }}">
-      <span class="brand-mark"></span>
-      SRO Rule Filings
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      SRO&nbsp;Filings
     </a>
     <nav>
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="on"{% endif %}>Filings</a>
       <a href="{{ url_for('sources_page') }}" {% if request.endpoint == 'sources_page' %}class="on"{% endif %}>Sources</a>
-      <a href="{{ url_for('weekly_report') }}">Weekly report</a>
+      <a href="{{ url_for('weekly_report') }}">Weekly</a>
     </nav>
     <div class="topbar-right">
-      <button id="refresh-btn" class="btn btn-primary" type="button">Refresh data</button>
+      {% set state = 'is-bad' if last_run and last_run['outcome'] == 'rejected'
+                     else ('is-stale' if last_run and last_run['outcome'] == 'ok-warnings' else '') %}
+      <span class="pulse {{ state }}" title="{{ last_run['started_at'] if last_run else 'never refreshed' }}">
+        <b></b>{% if last_run %}{{ last_run['outcome'] }}{% else %}no data{% endif %}
+      </span>
+      <button id="refresh-btn" class="btn btn-primary" type="button">Refresh</button>
     </div>
   </div>
 </header>
@@ -33,7 +38,7 @@
 
 <footer class="wrap foot">
   <span>{{ cfg.user_agent }}</span>
-  <span>Data: SEC self-regulatory organization rulemaking listings and exchange feeds</span>
+  <span>SEC SRO rulemaking listings &middot; exchange rule-filing feeds</span>
 </footer>
 
 <script>
@@ -42,23 +47,26 @@
   const toast = document.getElementById('toast');
   if (!btn) return;
 
+  let hideTimer = null;
   function show(message, kind) {
     toast.textContent = message;
-    toast.className = 'toast show ' + (kind || '');
+    toast.className = 'toast ' + (kind || '');
     toast.hidden = false;
+    clearTimeout(hideTimer);
+    if (kind !== 'info') hideTimer = setTimeout(() => { toast.hidden = true; }, 9000);
   }
 
   btn.addEventListener('click', async function () {
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = 'Refreshing…';
-    show('Fetching from the SEC and exchange feeds. This takes a minute.', 'info');
+    btn.textContent = 'Working…';
+    show('Fetching from the SEC and exchange feeds. This takes a few minutes.', 'info');
     try {
       const res = await fetch('{{ url_for("api_refresh") }}', { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        show(`Run #${data.run_id}: ${data.added} new, ${data.changed} changed. Reloading…`, 'ok');
-        setTimeout(() => window.location.reload(), 1400);
+        show('Run #' + data.run_id + ': ' + data.added + ' new, ' + data.changed + ' changed. Reloading…', 'ok');
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         show(data.summary || data.error || 'Refresh was rejected.', 'bad');
         btn.disabled = false;

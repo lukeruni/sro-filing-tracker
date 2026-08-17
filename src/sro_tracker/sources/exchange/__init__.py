@@ -36,7 +36,14 @@ from xml.etree import ElementTree
 
 from ...config import Config
 from ...http import Client
-from ...models import Filing, clean_text, parse_filing_no
+from ...models import (
+    STATUS_FILED,
+    STATUS_UNKNOWN,
+    Filing,
+    clean_text,
+    derive_status,
+    parse_filing_no,
+)
 from ...registry import Sro, by_code
 from .. import TIER_EDGE
 
@@ -91,17 +98,25 @@ def parse_rss(xml_text: str, *, source_url: str, source_label: str) -> list[Fili
             except (TypeError, ValueError):
                 log.debug("unparseable pubDate %r in %s", pub, source_label)
 
+        description = _item_text(item, "description")
+
+        # An exchange feed knows the filing exists but not what the SEC has done
+        # with it. Where the description does carry a recognisable action, use
+        # it; otherwise say "Filed" rather than "Unknown", which would read as
+        # "we cannot tell" when in fact we know exactly where it stands. Any
+        # real SEC status outranks this during reconciliation, so it never
+        # sticks once the release appears.
+        derived = derive_status(description)
+        status = STATUS_FILED if derived == STATUS_UNKNOWN else derived
+
         try:
             filings.append(
                 Filing.build(
-                    filing_no=title if parse_filing_no(title) else _item_text(item, "description"),
+                    filing_no=title if parse_filing_no(title) else description,
                     sro=owner.name,
                     sro_family=owner.family,
-                    summary=_item_text(item, "description"),
-                    # Status is deliberately left to derivation, and will
-                    # usually be Unknown. The SEC spine owns lifecycle state and
-                    # outranks the edge during reconciliation, so an edge record
-                    # can add a filing but never downgrade its status.
+                    summary=description,
+                    status=status,
                     filing_date=date_value,
                     filing_url=_item_text(item, "link"),
                     source=source_label,

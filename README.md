@@ -41,6 +41,12 @@ The two tiers join on `SR-<code>-<year>-<seq>`, which both publish. Every record
 carries `first_seen`, `last_seen` and `seen_by`, so you can always answer *who
 told us, and when*.
 
+A filing seen only by an exchange feed gets the status **Filed** — published by
+the exchange, not yet acted on by the SEC. That is the honest label; "Unknown"
+would imply we cannot tell, when in fact we know exactly where it stands. Status
+only ever advances, so the moment the SEC release appears the real status takes
+over and `Filed` never sticks.
+
 ### Trust the filing number, not the URL
 
 Attribution always comes from the code inside the filing number, resolved
@@ -124,8 +130,9 @@ so you never get a spurious "connection refused" page.
 | `sro-tracker doctor` | Check configuration, scope, and connectivity |
 | `sro-tracker refresh` | Fetch, reconcile, gate, commit |
 | `sro-tracker serve` | Local dashboard on `127.0.0.1:5057` |
-| `sro-tracker export` | Write CSV or Excel |
-| `sro-tracker report` | Weekly change report |
+| `sro-tracker export` | Write CSV or the Excel workbook |
+| `sro-tracker report` | Weekly comparison report |
+| `sro-tracker weekly` | **Refresh + report + workbook + deliver, in one call** |
 | `sro-tracker sources` | List SROs and coverage |
 | `sro-tracker validate` | Post-refresh sanity checks |
 
@@ -167,6 +174,69 @@ Cboe Options and C2 have no trustworthy per-market feed, so they are served by
 the spine alone — complete, just not same-day. That is a deliberate trade.
 
 Adding an SRO is a one-line entry in `registry.py`. No parser changes.
+
+---
+
+## The Excel workbook
+
+`sro-tracker export` and the dashboard's **Export Excel** button produce a
+four-sheet workbook, not a data dump:
+
+- **Summary** — what the file contains, when it was produced, headline counts by
+  family and status, and the source health of the run behind it. A forwarded
+  copy is never context-free.
+- **Filings** — a native Excel Table, so sorting and filtering work without
+  touching the ribbon. Filing numbers are live hyperlinks to the SEC PDF, dates
+  are real date cells, and status is coloured by conditional formatting so it
+  survives re-sorting.
+- **By SRO** — an SRO × status matrix with totals: the pivot people otherwise
+  rebuild by hand every week.
+- **Activity** — this period against the one before, by family and status.
+
+Two details that matter more than they look. Dates are written as real `date`
+values rather than date-shaped strings, because a string sorts lexically and
+silently breaks Excel's date filters. And any cell beginning `=`, `+`, `-` or
+`@` is neutralised — filing summaries are third-party text from public websites,
+and CSV/Excel formula injection is a real path from a scraped page to code
+execution on the reader's machine.
+
+## The weekly email
+
+`sro-tracker weekly` refreshes, builds the report and workbook, and delivers —
+one call, meant for a scheduler.
+
+The email leads with a snapshot: new filings this week, the change against last
+week, approvals, and status moves. Then week-over-week tables by family and by
+status, the new filings themselves, and any status changes on older filings.
+
+**Periods are measured by filing date, not by when the scraper ran.** The change
+log records when *we* learned something, which makes week-over-week comparison
+meaningless after a backfill, a missed run, or a first install — everything
+would land in "this week". Filing dates belong to the filings, so "last week
+versus the week before" means the same thing however often the scraper ran.
+Status transitions are the deliberate exception: a 2025 filing approved this
+morning is genuinely this week's news, so those come from the change log.
+
+The HTML is built for **Outlook**, which renders mail with Microsoft Word and
+ignores flexbox, grid, float, `border-radius` and anything in a `<style>` block.
+So the layout is nested tables with inline styles and `bgcolor` attributes.
+There is a test that fails if any of those constructs creep back in.
+
+### Scheduling it
+
+```powershell
+.\scripts\install_schedule.ps1 -Time 07:30 -Day Monday -Contact "you@example.com"
+```
+
+Registers a Windows Scheduled Task, logging stdout and stderr to `logs/` — a
+scheduled job that fails silently is indistinguishable from one that never ran.
+`-StartWhenAvailable` is set, so a laptop asleep at 07:30 on Monday still runs
+the report when it wakes rather than skipping the week. The contact address is
+captured at registration because a scheduled task does not inherit your
+interactive shell's environment.
+
+Test it immediately with `Start-ScheduledTask -TaskName "SRO Filing Tracker -
+Weekly Report"`, and remove it with `-Remove`.
 
 ---
 
@@ -216,7 +286,7 @@ not `Send` — a human still presses send.
 
 ```bash
 .venv\Scripts\python -m pip install -e ".[dev]"
-.venv\Scripts\python -m pytest        # 62 tests, no network required
+.venv\Scripts\python -m pytest        # 90 tests, no network required
 ```
 
 Parser tests run against committed HTML/XML captured from the real sites, so the
@@ -244,8 +314,8 @@ src/sro_tracker/
   sources/
     sec_sro.py    tier 1: the SEC spine (one parser, all SROs)
     exchange/     tier 2: verified exchange feeds
-  exports/        CSV and Excel
-  report.py       weekly change report
+  exports/        CSV and the multi-sheet workbook
+  report.py       weekly comparison report, Outlook-safe HTML
   mail.py         file / SMTP / Outlook transports
   web/            Flask dashboard, server-rendered
   cli.py          one entry point for every context
@@ -253,7 +323,8 @@ src/sro_tracker/
 
 No build step, no bundler, no client framework — the dashboard is Jinja plus a
 little vanilla JS, so it will still start in three years on a machine where
-nobody has run `npm`.
+nobody has run `npm`. The dark chrome is fixed and the content surface follows
+the OS light/dark setting.
 
 ---
 

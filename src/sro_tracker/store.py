@@ -313,6 +313,44 @@ class Store:
 
     # ---- queries -------------------------------------------------------
 
+    @staticmethod
+    def _where(
+        search: str = "",
+        sro: str = "",
+        family: str = "",
+        status: str = "",
+        year: int | None = None,
+        since: dt.date | None = None,
+    ) -> tuple[str, list[object]]:
+        """Build the shared filter clause.
+
+        One builder for both ``query`` and ``count_matching``, so the count can
+        never disagree with the page it is counting.
+        """
+        clauses = ["1=1"]
+        args: list[object] = []
+        if search:
+            clauses.append(
+                "AND (filing_no LIKE ? OR summary LIKE ? OR release_number LIKE ? OR sro LIKE ?)")
+            like = f"%{search}%"
+            args += [like, like, like, like]
+        if sro:
+            clauses.append("AND sro = ?")
+            args.append(sro)
+        if family:
+            clauses.append("AND sro_family = ?")
+            args.append(family)
+        if status:
+            clauses.append("AND status = ?")
+            args.append(status)
+        if year:
+            clauses.append("AND filing_year = ?")
+            args.append(year)
+        if since:
+            clauses.append("AND filing_date >= ?")
+            args.append(since.isoformat())
+        return " ".join(clauses), args
+
     def query(
         self,
         *,
@@ -325,37 +363,38 @@ class Store:
         limit: int | None = None,
         offset: int = 0,
     ) -> list[sqlite3.Row]:
-        sql = ["SELECT * FROM filings WHERE 1=1"]
-        args: list[object] = []
-        if search:
-            sql.append("AND (filing_no LIKE ? OR summary LIKE ? OR release_number LIKE ? OR sro LIKE ?)")
-            like = f"%{search}%"
-            args += [like, like, like, like]
-        if sro:
-            sql.append("AND sro = ?")
-            args.append(sro)
-        if family:
-            sql.append("AND sro_family = ?")
-            args.append(family)
-        if status:
-            sql.append("AND status = ?")
-            args.append(status)
-        if year:
-            sql.append("AND filing_year = ?")
-            args.append(year)
-        if since:
-            sql.append("AND filing_date >= ?")
-            args.append(since.isoformat())
-        sql.append("ORDER BY filing_date DESC NULLS LAST, filing_no DESC")
+        where, args = self._where(search, sro, family, status, year, since)
+        # `(filing_date IS NULL), filing_date DESC` rather than `DESC NULLS
+        # LAST`: identical result, but the NULLS LAST syntax needs SQLite 3.30+
+        # and this has to run on whatever Python a locked-down machine ships.
+        sql = (f"SELECT * FROM filings WHERE {where} "
+               "ORDER BY (filing_date IS NULL), filing_date DESC, filing_no DESC")
         if limit is not None:
-            sql.append("LIMIT ? OFFSET ?")
-            args += [limit, offset]
-        return list(self._conn.execute(" ".join(sql), args))
+            sql += " LIMIT ? OFFSET ?"
+            args = args + [limit, offset]
+        return list(self._conn.execute(sql, args))
 
-    def count_matching(self, **kwargs: object) -> int:
-        kwargs.pop("limit", None)
-        kwargs.pop("offset", None)
-        return len(self.query(**kwargs))  # type: ignore[arg-type]
+    def count_matching(
+        self,
+        *,
+        search: str = "",
+        sro: str = "",
+        family: str = "",
+        status: str = "",
+        year: int | None = None,
+        since: dt.date | None = None,
+    ) -> int:
+        """Count without materialising rows - the dashboard calls this per page."""
+        where, args = self._where(search, sro, family, status, year, since)
+        return int(self._conn.execute(
+            f"SELECT COUNT(*) FROM filings WHERE {where}", args).fetchone()[0])
+
+    def history_for(self, filing_no: str) -> list[sqlite3.Row]:
+        """Change log for one filing, newest first."""
+        return list(self._conn.execute(
+            "SELECT * FROM filing_history WHERE filing_no=? ORDER BY id DESC",
+            (filing_no,),
+        ))
 
     def distinct(self, column: str) -> list[str]:
         if column not in {"sro", "sro_family", "status", "filing_year", "source"}:
@@ -388,3 +427,57 @@ class Store:
         row = self._conn.execute(
             "SELECT MAX(filing_date) AS d FROM filings").fetchone()
         return parse_date(row["d"]) if row and row["d"] else None
+
+    # ---- period comparison ---------------------------------------------
+    #
+    # These key off ``filing_date`` rather than off the change log. That matters:
+    # the change log records when *we* learned something, which makes week-over-
+    # week comparison meaningless after a backfill or a missed run. Filing dates
+    # are a property of the filings themselves, so "last week versus the week
+    # before" means the same thing regardless of when the scraper ran.
+
+    def filings_in_period(self, start: dt.date, end: dt.date) -> list[sqlite3.Row]:
+        """Filings dated within ``[start, end)``."""
+        return list(self._conn.execute(
+            """SELECT * FROM filings
+                WHERE filing_date >= ? AND filing_date < ?
+             ORDER BY filing_date DESC, filing_no DESC""",
+            (start.isoformat(), end.isoformat()),
+        ))
+
+    def count_in_period(self, start: dt.date, end: dt.date) -> int:
+        return int(self._conn.execute(
+            "SELECT COUNT(*) FROM filings WHERE filing_date >= ? AND filing_date < ?",
+            (start.isoformat(), end.isoformat()),
+        ).fetchone()[0])
+
+    def breakdown_in_period(
+        self, start: dt.date, end: dt.date, column: str
+    ) -> dict[str, int]:
+        """Counts grouped by ``column`` for filings dated in the period."""
+        if column not in {"sro", "sro_family", "status"}:
+            raise ValueError(f"not a groupable column: {column}")
+        rows = self._conn.execute(
+            f"""SELECT {column} AS v, COUNT(*) AS n FROM filings
+                 WHERE filing_date >= ? AND filing_date < ?
+                 GROUP BY v ORDER BY n DESC""",
+            (start.isoformat(), end.isoformat()),
+        )
+        return {str(r["v"]): int(r["n"]) for r in rows}
+
+    def status_changes_in_window(self, since: dt.datetime) -> list[sqlite3.Row]:
+        """Filings whose status the change log shows moving since ``since``.
+
+        Status transitions are the one thing that genuinely belongs to
+        observation time rather than filing date - a 2025 filing approved this
+        morning is this week's news.
+        """
+        return list(self._conn.execute(
+            """SELECT h.changes, h.at, f.*
+                 FROM filing_history h
+                 JOIN filings f ON f.filing_no = h.filing_no
+                WHERE h.at >= ? AND h.change_type = 'changed'
+                  AND h.changes LIKE '%"status"%'
+             ORDER BY h.at DESC""",
+            (since.isoformat(sep=" ", timespec="seconds"),),
+        ))

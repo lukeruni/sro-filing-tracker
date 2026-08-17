@@ -30,6 +30,13 @@ from typing import Iterable
 # generic "notice of filing".
 
 STATUS_APPROVED = "Approved"
+STATUS_FILED = "Filed"
+"""Published by the exchange, not yet acted on by the SEC.
+
+Only an edge source sets this. It is the honest label for a filing we learned
+about from an exchange feed days before the SEC release exists - "Unknown" would
+imply we cannot tell, when in fact we know precisely where it stands.
+"""
 STATUS_NOTICE = "Notice"
 STATUS_IMMEDIATELY_EFFECTIVE = "Immediately Effective"
 STATUS_WITHDRAWN = "Withdrawn"
@@ -67,15 +74,18 @@ _STATUS_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 # what stops a stale "Notice" row from overwriting a later "Approved".
 STATUS_RANK: dict[str, int] = {
     STATUS_UNKNOWN: 0,
-    STATUS_NOTICE: 1,
-    STATUS_IMMEDIATELY_EFFECTIVE: 2,
-    STATUS_AMENDED: 3,
-    STATUS_EXTENDED: 4,
-    STATUS_PROCEEDINGS: 5,
-    STATUS_SUSPENDED: 6,
-    STATUS_WITHDRAWN: 7,
-    STATUS_DISAPPROVED: 8,
-    STATUS_APPROVED: 9,
+    # "Filed" sits just above Unknown: it is real information, but any SEC
+    # status supersedes it the moment the release appears.
+    STATUS_FILED: 1,
+    STATUS_NOTICE: 2,
+    STATUS_IMMEDIATELY_EFFECTIVE: 3,
+    STATUS_AMENDED: 4,
+    STATUS_EXTENDED: 5,
+    STATUS_PROCEEDINGS: 6,
+    STATUS_SUSPENDED: 7,
+    STATUS_WITHDRAWN: 8,
+    STATUS_DISAPPROVED: 9,
+    STATUS_APPROVED: 10,
 }
 
 

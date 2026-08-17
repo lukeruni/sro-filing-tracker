@@ -212,23 +212,41 @@ def cmd_export(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _build_weekly(cfg: Config, days: int, *, attach: bool):
+    """Build the report and, optionally, the workbook that goes with it."""
+    with Store(cfg.db_path) as store:
+        built = report_module.build(store, days=days)
+        attachment = None
+        if attach:
+            rows = built.current.filings or store.query(limit=2000)
+            scope = (f"Filings dated {built.current.label}"
+                     if built.current.filings else "All tracked filings")
+            last_run = store.last_run()
+            context = exports.ExportContext(
+                scope=scope,
+                generated_at=built.generated_at,
+                source_health=store.source_health(last_run["id"]) if last_run else (),
+                comparison=report_module.comparison_for_export(built),
+                total_tracked=store.count(),
+            )
+            attachment = exports.to_excel(
+                rows,
+                exports.timestamped(cfg.export_dir, "weekly-filings", ".xlsx"),
+                title=f"Week of {built.current.short_label}",
+                context=context,
+            )
+    return built, attachment
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = _load(args)
-    with Store(cfg.db_path) as store:
-        built = report_module.build(store, days=args.days)
+    built, attachment = _build_weekly(cfg, args.days, attach=args.attach)
 
     print(report_module.render_text(built))
     path = report_module.write(built, cfg)
     print(f"HTML report: {path}")
-
-    attachment = None
-    if args.attach:
-        with Store(cfg.db_path) as store:
-            rows = store.query(since=built.since.date())
-        if rows:
-            attachment = exports.to_excel(
-                rows, exports.timestamped(cfg.export_dir, "weekly-filings", ".xlsx"))
-            print(f"Attachment:  {attachment}")
+    if attachment:
+        print(f"Attachment:  {attachment}")
 
     if args.send and not cfg.mail_to:
         print("Refusing to send: mail_to is empty.", file=sys.stderr)
@@ -249,6 +267,64 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     print(delivery.render())
     return EXIT_OK
+
+
+def cmd_weekly(args: argparse.Namespace) -> int:
+    """Refresh, build the report and workbook, then deliver. One scheduled call.
+
+    Ordering matters: the report is only built from a refresh that committed.
+    If the refresh is rejected the existing data is still current enough to
+    report on, so the run continues but says so - a scheduled job that goes
+    silent is worse than one that reports stale-but-labelled data.
+    """
+    cfg = _load(args)
+    _require_valid(cfg)
+    started = time.time()
+    degraded = False
+
+    print(f"[1/3] refreshing  {dt_now()}")
+    with Store(cfg.db_path) as store:
+        refreshed = pipeline.refresh(cfg, store, progress=None)
+    print(f"      {refreshed.verdict.summary()}")
+    print(f"      +{refreshed.added} new, ~{refreshed.changed} changed")
+    if not refreshed.ok:
+        degraded = True
+        print("      WARNING: refresh did not commit; reporting on existing data.",
+              file=sys.stderr)
+    elif refreshed.verdict.verdict == quality.VERDICT_PASS_WITH_WARNINGS:
+        degraded = True
+
+    print(f"[2/3] building report ({args.days} days)")
+    built, attachment = _build_weekly(cfg, args.days, attach=not args.no_attach)
+    path = report_module.write(built, cfg)
+    print(f"      {built.subject}")
+    print(f"      {path}")
+    if attachment:
+        print(f"      {attachment}")
+
+    print(f"[3/3] delivering via '{cfg.mail_transport}'")
+    try:
+        delivery = mail.deliver(
+            cfg,
+            subject=built.subject,
+            html_body=report_module.render_html(built, cfg=cfg),
+            text_body=report_module.render_text(built),
+            attachment=attachment,
+            send=not args.no_send,
+        )
+    except mail.MailError as exc:
+        print(f"      delivery FAILED: {exc}", file=sys.stderr)
+        return EXIT_FAIL
+    print(f"      {delivery.render()}")
+
+    print(f"\nDone in {time.time() - started:.0f}s.")
+    return EXIT_WARN if degraded else EXIT_OK
+
+
+def dt_now() -> str:
+    import datetime
+
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def cmd_sources(args: argparse.Namespace) -> int:
@@ -288,9 +364,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         if not last or last["outcome"] == "rejected":
             failures.append("the most recent run did not commit")
 
-        undated = len(store.query(search="")) - len(
-            [r for r in store.query() if r["filing_date"]])
-        checks.append(("records with a date", f"{count - undated:,} of {count:,}"))
+        dated = sum(1 for r in store.query() if r["filing_date"])
+        undated = count - dated
+        checks.append(("records with a date", f"{dated:,} of {count:,}"))
         if count and undated / count > 0.05:
             failures.append(f"{undated} records have no filing date")
 
@@ -368,6 +444,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--send", action="store_true",
                    help="deliver via the configured transport (default is preview only)")
     p.set_defaults(func=cmd_report)
+
+    p = subs.add_parser(
+        "weekly",
+        help="refresh, build the report and workbook, and deliver it (one scheduled call)")
+    p.add_argument("--days", type=int, default=7)
+    p.add_argument("--no-attach", action="store_true", help="skip the Excel attachment")
+    p.add_argument("--no-send", action="store_true",
+                   help="build everything but only write a preview")
+    p.set_defaults(func=cmd_weekly)
 
     p = subs.add_parser("sources", help="list configured SROs and coverage")
     p.add_argument("--all", action="store_true", help="include out-of-scope SROs")

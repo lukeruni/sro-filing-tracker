@@ -15,23 +15,37 @@
 {% endif %}
 
 <div class="stats">
-  <div class="stat">
+  <div class="stat is-key">
     <div class="n">{{ '{:,}'.format(grand_total) }}</div>
     <div class="k">Filings tracked</div>
+    <div class="d">{{ facets.sro|length }} SROs</div>
+  </div>
+  <div class="stat is-key">
+    <div class="n">{{ period.this_week }}</div>
+    <div class="k">This week</div>
+    <div class="d">
+      {% if period.delta > 0 %}<span class="up">&#9650; +{{ period.delta }}</span>
+      {% elif period.delta < 0 %}<span class="down">&#9660; {{ period.delta }}</span>
+      {% else %}&mdash;{% endif %}
+      vs {{ period.last_week }} prior
+    </div>
   </div>
   <div class="stat">
     <div class="n">{{ '{:,}'.format(total) }}</div>
     <div class="k">Matching filters</div>
+    <div class="d">{{ pages }} page{{ '' if pages == 1 else 's' }}</div>
   </div>
-  {% for family, n in by_family[:3] %}
+  {% for family, n in by_family[:2] %}
   <div class="stat">
     <div class="n">{{ '{:,}'.format(n) }}</div>
     <div class="k">{{ family }}</div>
+    <div class="d">{{ (n * 100 // grand_total) if grand_total else 0 }}% of total</div>
   </div>
   {% endfor %}
   <div class="stat">
     <div class="n">{{ last_run['added'] if last_run else 0 }}</div>
     <div class="k">New last run</div>
+    <div class="d">{{ last_run['started_at'][:16] if last_run else 'never' }}</div>
   </div>
 </div>
 

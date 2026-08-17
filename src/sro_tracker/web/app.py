@@ -85,6 +85,20 @@ def create_app(cfg: Config) -> Flask:
             by_status = store.summary_by("status")
             grand_total = store.count()
 
+            # Week-over-week, measured by filing date so it means the same
+            # thing regardless of when the scraper last ran.
+            end = dt.date.today() + dt.timedelta(days=1)
+            week_start = end - dt.timedelta(days=7)
+            prior_start = week_start - dt.timedelta(days=7)
+            this_week = store.count_in_period(week_start, end)
+            last_week = store.count_in_period(prior_start, week_start)
+
+        period = {
+            "this_week": this_week,
+            "last_week": last_week,
+            "delta": this_week - last_week,
+        }
+
         return render_template(
             "index.html",
             rows=rows,
@@ -97,6 +111,7 @@ def create_app(cfg: Config) -> Flask:
             facets=facets,
             by_family=by_family,
             by_status=by_status,
+            period=period,
             last_run=last_run,
             health=health,
             cfg=cfg,
@@ -109,10 +124,7 @@ def create_app(cfg: Config) -> Flask:
             row = store.get(filing_no)
             if row is None:
                 return render_template("not_found.html", filing_no=filing_no, cfg=cfg), 404
-            history = list(store._conn.execute(  # noqa: SLF001 - read-only view
-                "SELECT * FROM filing_history WHERE filing_no=? ORDER BY id DESC",
-                (filing_no,),
-            ))
+            history = store.history_for(filing_no)
         return render_template("detail.html", row=row, history=history, cfg=cfg)
 
     @app.get("/sources")
