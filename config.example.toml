@@ -52,10 +52,17 @@ port = 5057
 # file    - write the report and stop (default; safe for a fresh clone)
 # smtp    - relay, for unattended scheduled runs
 # outlook - open a pre-filled draft in desktop Outlook via COM (needs pywin32)
-transport = "file"
+mail_transport = "file"
 
-# mail_from = "regulatory-tracker@example.com"
+# Who receives the weekly report. Delivery also requires a non-file transport
+# and `sro-tracker weekly` without --no-send, so nothing sends by accident.
 # mail_to = ["team@example.com"]
+# mail_from = "regulatory-tracker@example.com"
+
 # smtp_host = "smtp.example.com"
 # smtp_port = 25
 # smtp_use_tls = true
+
+# Any key here that matches no setting is reported by `sro-tracker doctor`
+# rather than silently ignored. Save this file as UTF-8; a byte-order mark is
+# tolerated, but other encodings are not.

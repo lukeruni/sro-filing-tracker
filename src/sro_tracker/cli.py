@@ -473,6 +473,11 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return EXIT_FAIL
+    except config.ConfigError as exc:
+        # A malformed config file is a user problem with a user-readable cause;
+        # a traceback here would bury it.
+        print(f"Configuration error:\n  {exc}", file=sys.stderr)
+        return EXIT_CONFIG
     except KeyError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return EXIT_CONFIG

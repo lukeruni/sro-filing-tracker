@@ -92,6 +92,13 @@ class Config:
     smtp_port: int = 25
     smtp_use_tls: bool = True
 
+    unknown_keys: tuple[str, ...] = ()
+    """Config-file keys that matched no setting. Reported by ``doctor``.
+
+    A silently ignored key is the worst kind of configuration bug: everything
+    looks configured and nothing behaves that way.
+    """
+
     # ---- derived paths -------------------------------------------------
 
     def __post_init__(self) -> None:
@@ -154,6 +161,16 @@ class Config:
             )
         if self.rate_limit_per_sec > 8:
             out.append("rate_limit_per_sec above 8 risks tripping SEC fair-access limits.")
+        for key in self.unknown_keys:
+            out.append(
+                f"config key {key!r} matched no setting and was ignored. "
+                f"Check the spelling against config.example.toml."
+            )
+        if self.mail_transport != "file" and not self.mail_to:
+            out.append(
+                f"mail_transport is {self.mail_transport!r} but mail_to is empty; "
+                f"nothing can be delivered."
+            )
         return out
 
 
@@ -163,6 +180,23 @@ class Config:
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
+
+
+class ConfigError(RuntimeError):
+    """The config file could not be read. Carries a message fit for a user."""
+
+
+# Section-scoped names people naturally write, mapped to the real field. Without
+# these, `[mail] transport = "smtp"` would be silently ignored - the worst kind
+# of configuration bug, because everything appears to work and nothing sends.
+_ALIASES = {
+    "transport": "mail_transport",
+    "from": "mail_from",
+    "to": "mail_to",
+    "recipients": "mail_to",
+    "timeout": "request_timeout",
+    "retries": "max_retries",
+}
 
 
 def _coerce(raw: str, field: dataclasses.Field) -> object:
@@ -191,18 +225,38 @@ def load(config_path: str | Path | None = None, **overrides: object) -> Config:
     fields = {f.name: f for f in dataclasses.fields(Config)}
 
     # 1. file
+    unknown: list[str] = []
     path = Path(config_path) if config_path else _project_root() / "config.toml"
     if path.exists():
-        with path.open("rb") as fh:
-            raw = tomllib.load(fh)
-        for section in raw.values():
-            if isinstance(section, dict):
-                for key, value in section.items():
-                    if key in fields:
-                        values[key] = value
+        data = path.read_bytes()
+        # Strip a UTF-8 BOM. PowerShell's `Set-Content -Encoding utf8` and
+        # several Windows editors write one; tomllib reads binary and does not
+        # skip it, failing with "Invalid statement at line 1, column 1" - a
+        # message that tells the user nothing about the real cause.
+        if data.startswith(b"\xef\xbb\xbf"):
+            data = data[3:]
+        try:
+            raw = tomllib.loads(data.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ConfigError(
+                f"{path} is not valid UTF-8: {exc}. Re-save the file as UTF-8."
+            ) from exc
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"{path} is not valid TOML: {exc}") from exc
+
+        def absorb(items: dict[str, object], section: str) -> None:
+            for key, value in items.items():
+                name = key if key in fields else _ALIASES.get(key, "")
+                if name in fields:
+                    values[name] = value
+                else:
+                    unknown.append(f"{section}{key}" if section else key)
+
         for key, value in raw.items():
-            if key in fields and not isinstance(value, dict):
-                values[key] = value
+            if isinstance(value, dict):
+                absorb(value, f"[{key}] ")
+            else:
+                absorb({key: value}, "")
 
     # 2. environment
     for name, field in fields.items():
@@ -225,7 +279,12 @@ def load(config_path: str | Path | None = None, **overrides: object) -> Config:
         if key in values and isinstance(values[key], list):
             values[key] = tuple(values[key])
 
-    return Config(**values)  # type: ignore[arg-type]
+    try:
+        cfg = Config(**values)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise ConfigError(f"{path}: {exc}") from exc
+    cfg.unknown_keys = tuple(unknown)
+    return cfg
 
 
 def describe(cfg: Config) -> str:
