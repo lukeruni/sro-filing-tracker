@@ -34,6 +34,17 @@ port = 6001
 """
 
 
+def test_the_suite_runs_in_an_isolated_environment():
+    """Regression: the suite used to pass on a clean machine and fail on a
+    configured one. Every machine that actually runs this app has
+    SRO_TRACKER_CONTACT set, so three config tests failed there and looked like
+    a broken build. `conftest.isolated_environment` clears them."""
+    import os
+
+    leaked = [n for n in os.environ if n.startswith("SRO_TRACKER_")]
+    assert not leaked, f"application environment leaked into tests: {leaked}"
+
+
 def test_reads_a_plain_config(tmp_path):
     cfg = config.load(write(tmp_path, BASIC))
     assert cfg.contact == "person@example.com"
