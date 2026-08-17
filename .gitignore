@@ -1,8 +1,13 @@
 # Runtime data. Never committed: a clone starts empty and populates on first
 # refresh. Committing scraped data makes the repo a stale mirror of the SEC.
-data/
-exports/
-logs/
+#
+# These are anchored with a leading slash on purpose. A bare "exports/" matches
+# at ANY depth and silently excluded src/sro_tracker/exports/ - the package -
+# producing a clone that installed cleanly and then failed on import. Tests did
+# not catch it because pytest reads from src/ directly; only a real clone did.
+/data/
+/exports/
+/logs/
 
 # Local configuration may carry contact addresses, internal proxies, CA bundle
 # paths and mail recipients.
