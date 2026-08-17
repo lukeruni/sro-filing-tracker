@@ -77,6 +77,41 @@ def test_package_data_is_present():
     assert (web / "static" / "styles.css").exists()
 
 
+def test_version_is_declared_once_and_agrees():
+    """pyproject and the package must not drift apart. A release where the
+    metadata says one thing and the running app says another is a support
+    problem that costs more to diagnose than it ever did to prevent."""
+    import tomllib
+
+    from sro_tracker.config import VERSION
+
+    with (REPO / "pyproject.toml").open("rb") as handle:
+        declared = tomllib.load(handle)["project"]["version"]
+    assert declared == VERSION, (
+        f"pyproject.toml says {declared}, sro_tracker.config.VERSION says {VERSION}")
+
+
+def test_python_floor_is_consistent():
+    """One minimum, enforced everywhere. Docs saying 3.11, the installer
+    accepting 3.10 and the detector accepting any 3.x is how a machine ends up
+    running an interpreter nobody tested."""
+    import re
+    import tomllib
+
+    with (REPO / "pyproject.toml").open("rb") as handle:
+        requires = tomllib.load(handle)["project"]["requires-python"]
+    floor = re.search(r"(\d+\.\d+)", requires).group(1)
+
+    setup = (REPO / "scripts" / "setup.ps1").read_text(encoding="utf-8")
+    match = re.search(r'\$MIN\s*=\s*\[version\]"(\d+\.\d+)"', setup)
+    assert match, "setup.ps1 no longer declares a $MIN version gate"
+    assert match.group(1) == floor, (
+        f"pyproject requires {floor}, setup.ps1 enforces {match.group(1)}")
+
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert f"Python {floor}+" in readme, f"README does not state Python {floor}+"
+
+
 def test_declared_dependencies_are_all_pure_python():
     """A compiler-free install is a deliberate constraint, not an accident:
     the target machines are locked down and have no build tools."""

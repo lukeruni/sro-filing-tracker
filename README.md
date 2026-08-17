@@ -303,7 +303,7 @@ not `Send` — a human still presses send.
 
 ```bash
 .venv\Scripts\python -m pip install -e ".[dev]"
-.venv\Scripts\python -m pytest        # 90 tests, no network required
+.venv\Scripts\python -m pytest        # the whole suite runs offline
 ```
 
 Parser tests run against committed HTML/XML captured from the real sites, so the

@@ -132,7 +132,7 @@ contact is captured at registration.
 ## Tests
 
 ```bash
-.venv\Scripts\python -m pytest          # 102 tests, fully offline
+.venv\Scripts\python -m pytest          # whole suite, fully offline
 .venv\Scripts\python -m pytest -m network  # opt-in: SRO websites resolve
 ```
 
