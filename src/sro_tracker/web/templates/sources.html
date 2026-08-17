@@ -48,11 +48,15 @@
     <span class="faint">{{ sros|length }} in scope</span></div>
   <div class="table-scroll">
     <table class="filings">
-      <thead><tr><th>SRO</th><th>Key</th><th>Code</th><th>Family</th><th>Authoritative</th><th>Freshness feed</th></tr></thead>
+      <thead><tr><th>SRO</th><th>Key</th><th>Code</th><th>Family</th><th>Authoritative</th><th>Freshness feed</th><th>Links</th></tr></thead>
       <tbody>
         {% for s in sros %}
         <tr>
-          <td class="nowrap">{{ s.name }}</td>
+          <td class="nowrap">
+            {% if s.website %}
+              <a href="{{ s.website }}" target="_blank" rel="noopener">{{ s.name }}</a>
+            {% else %}{{ s.name }}{% endif %}
+          </td>
           <td class="mono nowrap faint">{{ s.key }}</td>
           <td class="mono nowrap">{{ s.code }}</td>
           <td class="nowrap">{{ s.family }}</td>
@@ -63,6 +67,9 @@
             {% else %}
               <span class="pill faint">SEC only</span>
             {% endif %}
+          </td>
+          <td class="nowrap faint">
+            <a href="{{ s.listing_url(2026) }}" target="_blank" rel="noopener">SEC listing</a>
           </td>
         </tr>
         {% endfor %}

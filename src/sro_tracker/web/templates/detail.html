@@ -13,7 +13,14 @@
     <p style="margin:0 0 18px; font-size:15px; line-height:1.55">{{ row['summary'] }}</p>
     {% if row['notes'] %}<p class="faint" style="margin:0 0 18px">{{ row['notes'] }}</p>{% endif %}
     <dl class="kv">
-      <dt>SRO</dt><dd>{{ row['sro'] }} <span class="faint">({{ row['sro_family'] }})</span></dd>
+      <dt>SRO</dt>
+      <dd>
+        {% set sro_site = row['sro']|srourl %}
+        {% if sro_site %}
+          <a href="{{ sro_site }}" target="_blank" rel="noopener">{{ row['sro'] }}</a>
+        {% else %}{{ row['sro'] }}{% endif %}
+        <span class="faint">({{ row['sro_family'] }})</span>
+      </dd>
       <dt>Filing year</dt><dd>{{ row['filing_year'] }}</dd>
       <dt>SEC issue date</dt><dd>{{ row['filing_date']|nicedate }}</dd>
       <dt>Release number</dt><dd class="mono">{{ row['release_number'] or '—' }}</dd>

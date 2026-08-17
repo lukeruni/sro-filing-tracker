@@ -219,4 +219,9 @@ def create_app(cfg: Config) -> Flask:
     def statusclass(value: object) -> str:
         return "s-" + str(value or "unknown").lower().replace(" ", "-")
 
+    @app.template_filter("srourl")
+    def srourl(value: object) -> str:
+        """The SRO's own rule-filings page, resolved from its display name."""
+        return registry.website_for(str(value or ""))
+
     return app

@@ -316,6 +316,18 @@ def _comparison_table(report: WeeklyReport, rows: list[tuple[str, int, int]],
     )
 
 
+def _sro_link(name: object) -> str:
+    """SRO name, linked to its own rule-filings page where one is registered."""
+    from .registry import website_for
+
+    text = _esc(name)
+    url = website_for(str(name or ""))
+    if not url:
+        return text
+    return (f'<a href="{_esc(url)}" style="color:{INK};text-decoration:none;'
+            f'border-bottom:1px solid {RULE}">{text}</a>')
+
+
 def _filings_table(rows: list[sqlite3.Row]) -> str:
     head = (
         f'<tr><th style="{_TH}">Filing</th><th style="{_TH}">SRO</th>'
@@ -331,7 +343,7 @@ def _filings_table(rows: list[sqlite3.Row]) -> str:
                 f'font-weight:700">{number}</a>') if url else f"<strong>{number}</strong>"
         body.append(
             f'<tr><td style="{_TD};font-family:{MONO};font-size:12px;white-space:nowrap">{link}</td>'
-            f'<td style="{_TD};white-space:nowrap">{_esc(row["sro"])}'
+            f'<td style="{_TD};white-space:nowrap">{_sro_link(row["sro"])}'
             f'<div style="font-size:11px;color:{FAINT}">{_esc(row["sro_family"])}</div></td>'
             f'<td style="{_TD};white-space:nowrap;color:{MUTED}">'
             f'{_esc(_fmt_date(row["filing_date"]))}</td>'
@@ -447,7 +459,7 @@ def render_html(report: WeeklyReport, *, cfg: Config | None = None,
             body.append(
                 f'<tr><td style="{_TD};font-family:{MONO};font-size:12px;'
                 f'white-space:nowrap">{link}</td>'
-                f'<td style="{_TD};white-space:nowrap">{_esc(row["sro"])}</td>'
+                f'<td style="{_TD};white-space:nowrap">{_sro_link(row["sro"])}</td>'
                 f'<td style="{_TD};white-space:nowrap">{_chip(before)}'
                 f'<span style="color:{FAINT};padding:0 6px">&rarr;</span>{_chip(after)}</td>'
                 f'<td style="{_TD};line-height:1.45">{_esc(row["summary"])}</td></tr>'

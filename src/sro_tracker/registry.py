@@ -56,6 +56,14 @@ class Sro:
     core: bool = True
     """Part of the default tracking scope."""
 
+    website: str = ""
+    """The SRO's own rule-filings page, or its home page where none exists.
+
+    Every URL here was verified to resolve; none is a guess. Where a market has
+    no dedicated rule-filings page of its own, this points at the operator's
+    site and ``sec_listing`` remains the authoritative destination.
+    """
+
     def listing_url(self, year: int | str = "All") -> str:
         """URL for this SRO's filings, optionally scoped to one year."""
         if self.sec_path:
@@ -77,53 +85,104 @@ class Sro:
 # Everything else is registered but off by default, so widening scope is a
 # config change rather than a code change.
 
+_NYSE_FILINGS = "https://www.nyse.com/regulation/rule-filings"
+_NASDAQ_FILINGS = "https://listingcenter.nasdaq.com/rulebook/{}/rulefilings"
+_CBOE_EQ = "https://www.cboe.com/us/equities/regulation/rule_filings/{}/"
+_CBOE_OPT = "https://www.cboe.com/us/options/regulation/rule_filings/{}/"
+_MIAX_HOME = "https://www.miaxglobal.com/"
+
 SROS: tuple[Sro, ...] = (
     # ---- NYSE ----------------------------------------------------------
-    Sro("nyse",        "New York Stock Exchange",  "NYSE",     FAMILY_NYSE, 192816),
-    Sro("nyse-arca",   "NYSE Arca",                "NYSEARCA", FAMILY_NYSE, 192821),
+    # NYSE publishes all six markets on one rule-filings page.
+    Sro("nyse",        "New York Stock Exchange",  "NYSE",     FAMILY_NYSE, 192816,
+        website=_NYSE_FILINGS),
+    Sro("nyse-arca",   "NYSE Arca",                "NYSEARCA", FAMILY_NYSE, 192821,
+        website=_NYSE_FILINGS),
     Sro("nyse-amer",   "NYSE American",            "NYSEAMER", FAMILY_NYSE, 192826,
-        aliases=("NYSEAmer", "NYSEMKT", "Amex")),
-    Sro("nyse-natl",   "NYSE National",            "NYSENAT",  FAMILY_NYSE, 193066),
-    Sro("nyse-chx",    "NYSE Chicago",             "NYSECHX",  FAMILY_NYSE, 192831, aliases=("CHX",)),
-    Sro("nyse-texas",  "NYSE Texas",               "NYSETEX",  FAMILY_NYSE, 344836),
+        aliases=("NYSEAmer", "NYSEMKT", "Amex"), website=_NYSE_FILINGS),
+    Sro("nyse-natl",   "NYSE National",            "NYSENAT",  FAMILY_NYSE, 193066,
+        website=_NYSE_FILINGS),
+    Sro("nyse-chx",    "NYSE Chicago",             "NYSECHX",  FAMILY_NYSE, 192831,
+        aliases=("CHX",), website=_NYSE_FILINGS),
+    Sro("nyse-texas",  "NYSE Texas",               "NYSETEX",  FAMILY_NYSE, 344836,
+        website=_NYSE_FILINGS),
 
     # ---- Nasdaq --------------------------------------------------------
-    Sro("nasdaq",      "The Nasdaq Stock Market",  "NASDAQ",   FAMILY_NASDAQ, 192811),
-    Sro("nasdaq-bx",   "Nasdaq BX",                "BX",       FAMILY_NASDAQ, 192786, aliases=("NASDAQBX",)),
-    Sro("nasdaq-phlx", "Nasdaq PHLX",              "Phlx",     FAMILY_NASDAQ, 192806, aliases=("PHLX", "NASDAQPHLX")),
-    Sro("nasdaq-ise",  "Nasdaq ISE",               "ISE",      FAMILY_NASDAQ, 192796),
-    Sro("nasdaq-gemx", "Nasdaq GEMX",              "GEMX",     FAMILY_NASDAQ, 192791),
-    Sro("nasdaq-mrx",  "Nasdaq MRX",               "MRX",      FAMILY_NASDAQ, 192801),
-    Sro("nasdaq-texas", "Nasdaq Texas",            "NASDAQTX", FAMILY_NASDAQ, 354086, core=False),
+    Sro("nasdaq",      "The Nasdaq Stock Market",  "NASDAQ",   FAMILY_NASDAQ, 192811,
+        website=_NASDAQ_FILINGS.format("nasdaq")),
+    Sro("nasdaq-bx",   "Nasdaq BX",                "BX",       FAMILY_NASDAQ, 192786,
+        aliases=("NASDAQBX",), website=_NASDAQ_FILINGS.format("bx")),
+    Sro("nasdaq-phlx", "Nasdaq PHLX",              "Phlx",     FAMILY_NASDAQ, 192806,
+        aliases=("PHLX", "NASDAQPHLX"), website=_NASDAQ_FILINGS.format("phlx")),
+    Sro("nasdaq-ise",  "Nasdaq ISE",               "ISE",      FAMILY_NASDAQ, 192796,
+        website=_NASDAQ_FILINGS.format("ise")),
+    Sro("nasdaq-gemx", "Nasdaq GEMX",              "GEMX",     FAMILY_NASDAQ, 192791,
+        website=_NASDAQ_FILINGS.format("gemx")),
+    Sro("nasdaq-mrx",  "Nasdaq MRX",               "MRX",      FAMILY_NASDAQ, 192801,
+        website=_NASDAQ_FILINGS.format("mrx")),
+    Sro("nasdaq-texas", "Nasdaq Texas",            "NASDAQTX", FAMILY_NASDAQ, 354086,
+        core=False, website=_NASDAQ_FILINGS.format("nasdaq")),
 
     # ---- Cboe ----------------------------------------------------------
-    Sro("cboe",        "Cboe Exchange (Options)",  "CBOE",     FAMILY_CBOE, 192751),
-    Sro("cboe-c2",     "Cboe C2 Exchange",         "C2",       FAMILY_CBOE, 192736, aliases=("CboeC2",)),
-    Sro("cboe-bzx",    "Cboe BZX Exchange",        "CboeBZX",  FAMILY_CBOE, 192731, aliases=("BATS", "BZX")),
-    Sro("cboe-byx",    "Cboe BYX Exchange",        "CboeBYX",  FAMILY_CBOE, 192726, aliases=("BYX",)),
-    Sro("cboe-edga",   "Cboe EDGA Exchange",       "CboeEDGA", FAMILY_CBOE, 192741, aliases=("EDGA",)),
-    Sro("cboe-edgx",   "Cboe EDGX Exchange",       "CboeEDGX", FAMILY_CBOE, 192746, aliases=("EDGX",)),
+    Sro("cboe",        "Cboe Exchange (Options)",  "CBOE",     FAMILY_CBOE, 192751,
+        website=_CBOE_OPT.format("cone")),
+    Sro("cboe-c2",     "Cboe C2 Exchange",         "C2",       FAMILY_CBOE, 192736,
+        aliases=("CboeC2",), website=_CBOE_OPT.format("ctwo")),
+    Sro("cboe-bzx",    "Cboe BZX Exchange",        "CboeBZX",  FAMILY_CBOE, 192731,
+        aliases=("BATS", "BZX"), website=_CBOE_EQ.format("bzx")),
+    Sro("cboe-byx",    "Cboe BYX Exchange",        "CboeBYX",  FAMILY_CBOE, 192726,
+        aliases=("BYX",), website=_CBOE_EQ.format("byx")),
+    Sro("cboe-edga",   "Cboe EDGA Exchange",       "CboeEDGA", FAMILY_CBOE, 192741,
+        aliases=("EDGA",), website=_CBOE_EQ.format("edga")),
+    Sro("cboe-edgx",   "Cboe EDGX Exchange",       "CboeEDGX", FAMILY_CBOE, 192746,
+        aliases=("EDGX",), website=_CBOE_EQ.format("edgx")),
 
     # ---- MIAX ----------------------------------------------------------
-    Sro("miax",        "MIAX Options",             "MIAX",     FAMILY_MIAX, 192771),
-    Sro("miax-pearl",  "MIAX Pearl",               "PEARL",    FAMILY_MIAX, 192781, aliases=("MIAXPEARL",)),
-    Sro("miax-emerald", "MIAX Emerald",            "EMERALD",  FAMILY_MIAX, 192776, aliases=("MIAXEMERALD",)),
-    Sro("miax-sapphire", "MIAX Sapphire",          "SAPPHIRE", FAMILY_MIAX, 335656, aliases=("MIAXSAPPHIRE",)),
+    Sro("miax",        "MIAX Options",             "MIAX",     FAMILY_MIAX, 192771,
+        website="https://www.miaxglobal.com/markets/us-options/miax-options/rule-filings"),
+    Sro("miax-pearl",  "MIAX Pearl",               "PEARL",    FAMILY_MIAX, 192781,
+        aliases=("MIAXPEARL",),
+        website="https://www.miaxglobal.com/markets/us-equities/pearl-equities/rule-filings"),
+    # No dedicated Emerald rule-filings page exists; the operator site is the
+    # closest verified destination.
+    Sro("miax-emerald", "MIAX Emerald",            "EMERALD",  FAMILY_MIAX, 192776,
+        aliases=("MIAXEMERALD",), website=_MIAX_HOME),
+    Sro("miax-sapphire", "MIAX Sapphire",          "SAPPHIRE", FAMILY_MIAX, 335656,
+        aliases=("MIAXSAPPHIRE",),
+        website="https://www.miaxglobal.com/markets/us-options/miax-sapphire/rule-filings"),
 
     # ---- Independent ---------------------------------------------------
-    Sro("memx",        "MEMX",                     "MEMX",     FAMILY_INDEPENDENT, 192766),
-    Sro("ltse",        "Long-Term Stock Exchange", "LTSE",     FAMILY_INDEPENDENT, 192761),
-    Sro("iex",         "Investors Exchange",       "IEX",      FAMILY_INDEPENDENT, 192756),
-    Sro("txse",        "Texas Stock Exchange",     "TXSE",     FAMILY_INDEPENDENT, 350456),
-    Sro("gix",         "Green Impact Exchange",    "GIX",      FAMILY_INDEPENDENT, 345326),
-    Sro("box",         "BOX Exchange",             "BOX",      FAMILY_INDEPENDENT, 192721),
-    Sro("24x",         "24X National Exchange",    "24X",      FAMILY_INDEPENDENT, 344566, core=False),
-    Sro("mx2",         "MX2",                      "MX2",      FAMILY_INDEPENDENT, 344571, core=False),
+    Sro("memx",        "MEMX",                     "MEMX",     FAMILY_INDEPENDENT, 192766,
+        website="https://info.memxtrading.com/regulation"),
+    Sro("ltse",        "Long-Term Stock Exchange", "LTSE",     FAMILY_INDEPENDENT, 192761,
+        website="https://ltse.com/"),
+    Sro("iex",         "Investors Exchange",       "IEX",      FAMILY_INDEPENDENT, 192756,
+        website="https://www.iexexchange.io/resources/regulation/rule-filings"),
+    Sro("txse",        "Texas Stock Exchange",     "TXSE",     FAMILY_INDEPENDENT, 350456,
+        website="https://www.txse.com/"),
+    Sro("gix",         "Green Impact Exchange",    "GIX",      FAMILY_INDEPENDENT, 345326,
+        website="https://www.greenimpactexchange.com/"),
+    Sro("box",         "BOX Exchange",             "BOX",      FAMILY_INDEPENDENT, 192721,
+        website="https://boxexchange.com/"),
+    Sro("24x",         "24X National Exchange",    "24X",      FAMILY_INDEPENDENT, 344566,
+        core=False, website="https://24exchange.com/"),
+    Sro("mx2",         "MX2",                      "MX2",      FAMILY_INDEPENDENT, 344571,
+        core=False, website=_MIAX_HOME),
 
     # ---- FINRA (dedicated path) ---------------------------------------
     Sro("finra",       "FINRA",                    "FINRA",    FAMILY_FINRA,
-        sec_path=f"{SEC_BASE}/finra", aliases=("NASD",)),
+        sec_path=f"{SEC_BASE}/finra", aliases=("NASD",),
+        website="https://www.finra.org/rules-guidance/rule-filings"),
 )
+
+
+def website_for(sro_name: str) -> str:
+    """Resolve a display name back to its SRO website.
+
+    Records store the display name rather than the registry key, so this is the
+    lookup the dashboard, workbook and email all use to link an SRO.
+    """
+    return _BY_NAME.get(sro_name.strip().lower(), "")
 
 BY_KEY: dict[str, Sro] = {s.key: s for s in SROS}
 
@@ -131,6 +190,8 @@ _BY_CODE: dict[str, Sro] = {}
 for _sro in SROS:
     for _code in _sro.match_codes:
         _BY_CODE.setdefault(_code, _sro)
+
+_BY_NAME: dict[str, str] = {s.name.lower(): s.website for s in SROS}
 
 
 def all_sros() -> tuple[Sro, ...]:

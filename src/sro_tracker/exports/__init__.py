@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from .. import registry
 from ..models import COLUMNS
 
 # Excel refuses to open a workbook containing a cell longer than this.
@@ -354,6 +355,19 @@ def _filings_sheet(book, rows) -> None:
                 cell.value = "Open"
                 cell.hyperlink = str(raw)
                 cell.font = link_font
+                cell.alignment = top
+                continue
+
+            if column == "sro" and raw:
+                # Link the SRO to its own rule-filings page, so the workbook is
+                # a jumping-off point rather than a dead end.
+                site = registry.website_for(str(raw))
+                cell.value = _safe(raw)
+                if site:
+                    cell.hyperlink = site
+                    cell.font = link_font
+                else:
+                    cell.font = body
                 cell.alignment = top
                 continue
 

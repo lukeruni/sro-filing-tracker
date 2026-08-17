@@ -175,6 +175,23 @@ the spine alone — complete, just not same-day. That is a deliberate trade.
 
 Adding an SRO is a one-line entry in `registry.py`. No parser changes.
 
+## Links
+
+Everywhere a filing appears — dashboard, email, workbook — the filing number
+links to **its own SEC release PDF**, and the SRO name links to **that SRO's own
+rule-filings page**. Both are tested:
+
+- every parsed filing carries a `.pdf` URL, and the release number must appear
+  in that URL, so rows and links cannot be crossed;
+- the link is the release, never an `-ex5` exhibit, which is only a fragment of
+  the document;
+- every one of the 29 registered SRO websites was verified to resolve. Run
+  `pytest -m network` to re-check them after any site reshuffle.
+
+Where a market has no rule-filings page of its own (MIAX Emerald, LTSE, TXSE,
+GIX, BOX), the link goes to the operator's site and the SEC listing remains the
+authoritative destination — a verified general page beats a guessed specific one.
+
 ---
 
 ## The Excel workbook

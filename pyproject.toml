@@ -37,3 +37,7 @@ sro_tracker = ["web/templates/*.html", "web/static/*"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 filterwarnings = ["error::DeprecationWarning"]
+# The default suite is entirely offline and deterministic. Live-reachability
+# checks are opt-in: `pytest -m network`.
+markers = ["network: requires outbound internet access"]
+addopts = "-m 'not network'"

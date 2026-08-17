@@ -131,11 +131,29 @@
       </thead>
       <tbody>
         {% for r in rows %}
+        {% set sro_site = r['sro']|srourl %}
         <tr>
+          {# The filing number links straight to the SEC PDF — that is what
+             people want when they click it. The detail page, which carries the
+             change history, is one line below. #}
           <td class="nowrap mono">
-            <a href="{{ url_for('filing_detail', filing_no=r['filing_no']) }}">{{ r['filing_no'] }}</a>
+            {% if r['filing_url'] %}
+              <a href="{{ r['filing_url'] }}" target="_blank" rel="noopener"
+                 title="Open the filing PDF">{{ r['filing_no'] }}</a>
+            {% else %}
+              <span>{{ r['filing_no'] }}</span>
+            {% endif %}
+            <div class="faint">
+              <a href="{{ url_for('filing_detail', filing_no=r['filing_no']) }}">history</a>
+            </div>
           </td>
-          <td class="nowrap">{{ r['sro'] }}<div class="faint">{{ r['sro_family'] }}</div></td>
+          <td class="nowrap">
+            {% if sro_site %}
+              <a href="{{ sro_site }}" target="_blank" rel="noopener"
+                 title="{{ r['sro'] }} rule filings">{{ r['sro'] }}</a>
+            {% else %}{{ r['sro'] }}{% endif %}
+            <div class="faint">{{ r['sro_family'] }}</div>
+          </td>
           <td class="nowrap">{{ r['filing_date']|nicedate }}</td>
           <td><span class="badge {{ r['status']|statusclass }}">{{ r['status'] }}</span></td>
           <td class="summary-cell">
