@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sro-filing-tracker"
+version = "1.0.0"
+description = "Tracks SEC self-regulatory organization (SRO) rule filings across US exchanges."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["sec", "sro", "rule-filings", "19b-4", "regulatory", "exchanges"]
+
+# Pure-Python only, on purpose. Nothing here needs a compiler or a binary
+# wheel, so installation works on a locked-down corporate machine with no
+# build tools and no admin rights.
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "Flask>=3.0",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+sro-tracker = "sro_tracker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sro_tracker = ["web/templates/*.html", "web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["error::DeprecationWarning"]

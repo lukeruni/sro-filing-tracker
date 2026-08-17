@@ -1,0 +1,61 @@
+# Copy to config.toml and edit. config.toml is gitignored.
+# Every setting can also be given as an environment variable, SRO_TRACKER_<NAME>,
+# which takes precedence over this file.
+
+[identity]
+# REQUIRED. The SEC's automated-access policy requires a User-Agent carrying a
+# real contact address; requests without one are refused with HTTP 403.
+# There is deliberately no default: a placeholder gets you rate-limited under
+# somebody else's name.
+contact = "you@example.com"
+
+[scope]
+# Filing years to track. Omit for "current and previous year".
+# years = [2025, 2026]
+
+# SRO keys, or "family:NYSE" for a whole family. Omit for the core scope of 29.
+# Run `sro-tracker sources --all` to see every key.
+# sros = ["nyse", "nasdaq", "cboe-bzx", "finra"]
+
+# Tier-2 exchange feeds. Disable for an authoritative-only run.
+enable_exchange_sources = true
+
+[network]
+request_timeout = 30.0
+max_retries = 4
+
+# Requests per second, shared across all sources. The SEC allows 10; half that
+# is polite and still finishes a full refresh in about four minutes.
+rate_limit_per_sec = 5.0
+
+# Corporate root CA bundle, for networks with a TLS-inspecting proxy.
+# Certificate verification is never disabled - trust the root properly instead.
+# ca_bundle = "C:/certs/corporate-root.pem"
+# proxy = "http://proxy.internal:8080"
+
+[quality]
+# Refuse to commit a run producing fewer than this many records.
+min_records = 50
+
+# Refuse to commit a run that accounts for less of the store than this allows.
+# 0.10 means "reject if more than 10% of known filings went missing" - the
+# signature of a partial scrape.
+max_shrink_ratio = 0.10
+
+[web]
+# Loopback only. The bundled server is for local use; put a real server in
+# front of it before exposing it to anyone else.
+host = "127.0.0.1"
+port = 5057
+
+[mail]
+# file    - write the report and stop (default; safe for a fresh clone)
+# smtp    - relay, for unattended scheduled runs
+# outlook - open a pre-filled draft in desktop Outlook via COM (needs pywin32)
+transport = "file"
+
+# mail_from = "regulatory-tracker@example.com"
+# mail_to = ["team@example.com"]
+# smtp_host = "smtp.example.com"
+# smtp_port = 25
+# smtp_use_tls = true

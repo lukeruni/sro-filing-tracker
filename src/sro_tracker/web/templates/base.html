@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SRO Rule Filings{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#128220;</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark"></span>
+      SRO Rule Filings
+    </a>
+    <nav>
+      <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="on"{% endif %}>Filings</a>
+      <a href="{{ url_for('sources_page') }}" {% if request.endpoint == 'sources_page' %}class="on"{% endif %}>Sources</a>
+      <a href="{{ url_for('weekly_report') }}">Weekly report</a>
+    </nav>
+    <div class="topbar-right">
+      <button id="refresh-btn" class="btn btn-primary" type="button">Refresh data</button>
+    </div>
+  </div>
+</header>
+
+<div id="toast" class="toast" hidden></div>
+
+<main class="wrap">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="wrap foot">
+  <span>{{ cfg.user_agent }}</span>
+  <span>Data: SEC self-regulatory organization rulemaking listings and exchange feeds</span>
+</footer>
+
+<script>
+(function () {
+  const btn = document.getElementById('refresh-btn');
+  const toast = document.getElementById('toast');
+  if (!btn) return;
+
+  function show(message, kind) {
+    toast.textContent = message;
+    toast.className = 'toast show ' + (kind || '');
+    toast.hidden = false;
+  }
+
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Refreshing…';
+    show('Fetching from the SEC and exchange feeds. This takes a minute.', 'info');
+    try {
+      const res = await fetch('{{ url_for("api_refresh") }}', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        show(`Run #${data.run_id}: ${data.added} new, ${data.changed} changed. Reloading…`, 'ok');
+        setTimeout(() => window.location.reload(), 1400);
+      } else {
+        show(data.summary || data.error || 'Refresh was rejected.', 'bad');
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    } catch (err) {
+      show('Refresh failed: ' + err.message, 'bad');
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+})();
+</script>
+</body>
+</html>

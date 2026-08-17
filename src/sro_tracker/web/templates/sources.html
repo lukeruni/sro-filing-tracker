@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Source health{% endblock %}
+{% block content %}
+
+<div class="panel">
+  <div class="panel-head">
+    <h2>Source health</h2>
+    {% if last_run %}
+      <span class="faint">run #{{ last_run['id'] }} · {{ last_run['started_at'] }} · {{ last_run['outcome'] }}</span>
+    {% endif %}
+  </div>
+  {% if last_run and last_run['message'] %}
+    <div class="panel-body"><p class="muted" style="margin:0">{{ last_run['message'] }}</p></div>
+  {% endif %}
+  {% if health %}
+  <div class="table-scroll">
+    <table class="filings">
+      <thead>
+        <tr><th>Source</th><th>Tier</th><th>Status</th><th>Records</th><th>Time</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for h in health %}
+        <tr>
+          <td class="mono nowrap">{{ h['source'] }}</td>
+          <td class="nowrap">
+            {% if h['tier'] == 'spine' %}
+              <span class="pill">authoritative</span>
+            {% else %}
+              <span class="pill">freshness</span>
+            {% endif %}
+          </td>
+          <td><span class="pill pill-{{ h['status'] }}">{{ h['status'] }}</span></td>
+          <td class="nowrap">{{ h['records'] }}</td>
+          <td class="nowrap faint">{{ '%.1f'|format(h['duration']) }}s</td>
+          <td class="summary-cell faint">{{ h['message'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">No runs recorded yet.</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Configured SROs</h2>
+    <span class="faint">{{ sros|length }} in scope</span></div>
+  <div class="table-scroll">
+    <table class="filings">
+      <thead><tr><th>SRO</th><th>Key</th><th>Code</th><th>Family</th><th>Authoritative</th><th>Freshness feed</th></tr></thead>
+      <tbody>
+        {% for s in sros %}
+        <tr>
+          <td class="nowrap">{{ s.name }}</td>
+          <td class="mono nowrap faint">{{ s.key }}</td>
+          <td class="mono nowrap">{{ s.code }}</td>
+          <td class="nowrap">{{ s.family }}</td>
+          <td><span class="pill pill-ok">SEC</span></td>
+          <td>
+            {% if edge_coverage.get(s.key) %}
+              <span class="pill pill-ok">feed</span>
+            {% else %}
+              <span class="pill faint">SEC only</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Recent runs</h2></div>
+  <div class="table-scroll">
+    <table class="filings">
+      <thead><tr><th>Run</th><th>Started</th><th>Outcome</th><th>Fetched</th><th>Committed</th><th>New</th><th>Changed</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td class="mono">#{{ r['id'] }}</td>
+          <td class="nowrap faint">{{ r['started_at'] }}</td>
+          <td>
+            {% if r['outcome'] == 'rejected' %}<span class="pill pill-failed">rejected</span>
+            {% elif r['outcome'] == 'ok-warnings' %}<span class="pill pill-degraded">warnings</span>
+            {% else %}<span class="pill pill-ok">{{ r['outcome'] }}</span>{% endif %}
+          </td>
+          <td>{{ r['records_fetched'] }}</td>
+          <td>{{ r['records_committed'] }}</td>
+          <td>{{ r['added'] }}</td>
+          <td>{{ r['changed'] }}</td>
+          <td class="summary-cell faint">{{ r['message'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ row['filing_no'] }}{% endblock %}
+{% block content %}
+
+<p style="margin:18px 0"><a href="{{ url_for('index') }}">← All filings</a></p>
+
+<div class="panel">
+  <div class="panel-head">
+    <h2 class="mono">{{ row['filing_no'] }}</h2>
+    <span class="badge {{ row['status']|statusclass }}">{{ row['status'] }}</span>
+  </div>
+  <div class="panel-body">
+    <p style="margin:0 0 18px; font-size:15px; line-height:1.55">{{ row['summary'] }}</p>
+    {% if row['notes'] %}<p class="faint" style="margin:0 0 18px">{{ row['notes'] }}</p>{% endif %}
+    <dl class="kv">
+      <dt>SRO</dt><dd>{{ row['sro'] }} <span class="faint">({{ row['sro_family'] }})</span></dd>
+      <dt>Filing year</dt><dd>{{ row['filing_year'] }}</dd>
+      <dt>SEC issue date</dt><dd>{{ row['filing_date']|nicedate }}</dd>
+      <dt>Release number</dt><dd class="mono">{{ row['release_number'] or '—' }}</dd>
+      <dt>Document</dt>
+      <dd>{% if row['filing_url'] %}<a href="{{ row['filing_url'] }}" target="_blank" rel="noopener">{{ row['filing_url'] }}</a>{% else %}—{% endif %}</dd>
+      <dt>Listing page</dt>
+      <dd>{% if row['source_url'] %}<a href="{{ row['source_url'] }}" target="_blank" rel="noopener">{{ row['source_url'] }}</a>{% else %}—{% endif %}</dd>
+      <dt>Seen by</dt><dd>{{ row['seen_by'] or row['source'] }}</dd>
+      <dt>First seen</dt><dd class="faint">{{ row['first_seen'] }} (run #{{ row['first_run_id'] }})</dd>
+      <dt>Last seen</dt><dd class="faint">{{ row['last_seen'] }} (run #{{ row['last_run_id'] }})</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Change history</h2>
+    <span class="faint">{{ history|length }} event{{ '' if history|length == 1 else 's' }}</span></div>
+  <div class="table-scroll">
+    <table class="filings">
+      <thead><tr><th>When</th><th>Run</th><th>Event</th><th>Changes</th></tr></thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td class="nowrap faint">{{ h['at'] }}</td>
+          <td class="mono nowrap">#{{ h['run_id'] }}</td>
+          <td class="nowrap">
+            {% if h['change_type'] == 'added' %}<span class="pill pill-ok">added</span>
+            {% else %}<span class="pill pill-degraded">changed</span>{% endif %}
+          </td>
+          <td class="mono summary-cell faint">{{ h['changes'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if last_run and last_run['outcome'] == 'rejected' %}
+  <div class="banner banner-bad">
+    <strong>Last refresh was rejected and no data was written.</strong>
+    {{ last_run['message'] }}
+    <a href="{{ url_for('sources_page') }}">See source health →</a>
+  </div>
+{% elif last_run and last_run['outcome'] == 'ok-warnings' %}
+  <div class="banner banner-warn">
+    Last refresh completed with warnings.
+    <a href="{{ url_for('sources_page') }}">See source health →</a>
+  </div>
+{% endif %}
+
+<div class="stats">
+  <div class="stat">
+    <div class="n">{{ '{:,}'.format(grand_total) }}</div>
+    <div class="k">Filings tracked</div>
+  </div>
+  <div class="stat">
+    <div class="n">{{ '{:,}'.format(total) }}</div>
+    <div class="k">Matching filters</div>
+  </div>
+  {% for family, n in by_family[:3] %}
+  <div class="stat">
+    <div class="n">{{ '{:,}'.format(n) }}</div>
+    <div class="k">{{ family }}</div>
+  </div>
+  {% endfor %}
+  <div class="stat">
+    <div class="n">{{ last_run['added'] if last_run else 0 }}</div>
+    <div class="k">New last run</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body">
+    <form class="filters" method="get" action="{{ url_for('index') }}">
+      <div class="field field-grow">
+        <label for="q">Search</label>
+        <input id="q" name="q" type="search" value="{{ filters.search }}"
+               placeholder="Filing number, summary text, release number…">
+      </div>
+      <div class="field">
+        <label for="family">Family</label>
+        <select id="family" name="family">
+          <option value="">All families</option>
+          {% for f in facets.family %}
+            <option value="{{ f }}" {% if filters.family == f %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="sro">SRO</label>
+        <select id="sro" name="sro">
+          <option value="">All SROs</option>
+          {% for s in facets.sro %}
+            <option value="{{ s }}" {% if filters.sro == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="">Any status</option>
+          {% for s in facets.status %}
+            <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="year">Year</label>
+        <select id="year" name="year">
+          <option value="">All years</option>
+          {% for y in facets.year %}
+            <option value="{{ y }}" {% if filters.year and filters.year|string == y %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <a class="btn" href="{{ url_for('index') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h2>Filings</h2>
+    <span class="faint">showing {{ rows|length }} of {{ '{:,}'.format(total) }}</span>
+    <div style="margin-left:auto; display:flex; gap:8px">
+      <a class="btn" href="{{ url_for('export', kind='xlsx', **args) }}">Export Excel</a>
+      <a class="btn" href="{{ url_for('export', kind='csv', **args) }}">Export CSV</a>
+    </div>
+  </div>
+
+  {% if rows %}
+  <div class="table-scroll">
+    <table class="filings">
+      <thead>
+        <tr>
+          <th>Filing</th>
+          <th>SRO</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Summary</th>
+          <th>Release</th>
+          <th>Seen by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="nowrap mono">
+            <a href="{{ url_for('filing_detail', filing_no=r['filing_no']) }}">{{ r['filing_no'] }}</a>
+          </td>
+          <td class="nowrap">{{ r['sro'] }}<div class="faint">{{ r['sro_family'] }}</div></td>
+          <td class="nowrap">{{ r['filing_date']|nicedate }}</td>
+          <td><span class="badge {{ r['status']|statusclass }}">{{ r['status'] }}</span></td>
+          <td class="summary-cell">
+            {{ r['summary'] }}
+            {% if r['notes'] %}<div class="faint">{{ r['notes'] }}</div>{% endif %}
+          </td>
+          <td class="nowrap mono">
+            {% if r['filing_url'] %}
+              <a href="{{ r['filing_url'] }}" target="_blank" rel="noopener">{{ r['release_number'] or 'PDF' }}</a>
+            {% else %}
+              <span class="faint">{{ r['release_number'] or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="faint nowrap">{{ r['seen_by'] or r['source'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="pager">
+    {% if page > 1 %}
+      <a href="{{ url_for('index', **dict(args, page=page-1)) }}">← Previous</a>
+    {% endif %}
+    <span class="cur">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}
+      <a href="{{ url_for('index', **dict(args, page=page+1)) }}">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    {% if grand_total == 0 %}
+      <p><strong>No data yet.</strong></p>
+      <p class="faint">Run <code>sro-tracker refresh</code>, or press <em>Refresh data</em> above.</p>
+    {% else %}
+      <p>No filings match these filters.</p>
+      <p><a href="{{ url_for('index') }}">Clear filters</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

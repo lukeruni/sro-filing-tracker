@@ -1,0 +1,36 @@
+# Runtime data. Never committed: a clone starts empty and populates on first
+# refresh. Committing scraped data makes the repo a stale mirror of the SEC.
+data/
+exports/
+logs/
+
+# Local configuration may carry contact addresses, internal proxies, CA bundle
+# paths and mail recipients.
+config.toml
+.env
+*.pem
+*.crt
+
+# Generated output
+*.xlsx
+*.csv
+!tests/fixtures/*.csv
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
